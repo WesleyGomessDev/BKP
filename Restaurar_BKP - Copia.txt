@@ -1,0 +1,92 @@
+@echo off
+REM restaurar_backup.bat - restaura o backup gerado por backup_usuario.bat
+REM Copia o arquivo se a PASTA de destino existir (substitui ou cria o arquivo).
+REM Se a pasta de destino nao existir, ignora. Nunca cria pastas nem exclui nada.
+setlocal EnableExtensions EnableDelayedExpansion
+title Restaurar Backup
+set /a OK=0, IGN=0, ERR=0
+
+echo.
+set "RACF="
+set /p "RACF=Digite a RACF: "
+set "RACF=!RACF: =!"
+if not defined RACF goto :RacfInvalida
+echo !RACF!| findstr /r /i /x "[a-z0-9][a-z0-9]*" >nul || goto :RacfInvalida
+
+set "BK=C:\temp\Backup_!RACF!"
+if not exist "!BK!\" goto :SemBackup
+
+echo.
+echo Restaurando de: !BK!
+echo (Feche o Excel, o Outlook e os navegadores antes, senao arquivos em uso darao erro)
+echo.
+
+REM Favoritos (Chrome e Edge, todos os perfis)
+call :Pasta "!BK!\Favoritos_Chrome" "%LOCALAPPDATA%\Google\Chrome\User Data"
+call :Pasta "!BK!\Favoritos_Edge" "%LOCALAPPDATA%\Microsoft\Edge\User Data"
+
+REM BcpConfig (com ou sem acento em "Agencia")
+set "AE=%APPDATA%\Agencia Estado"
+if not exist "!AE!\" for /d %%D in ("%APPDATA%\Ag?ncia Estado") do set "AE=%%~fD"
+call :Pasta "!BK!\BcpConfig" "!AE!\Broadcast\BcpConfig"
+
+REM Excel
+call :Pasta "!BK!\Excel\XLSTART" "%APPDATA%\Microsoft\Excel\XLSTART"
+call :Pasta "!BK!\Excel\AddIns" "%APPDATA%\Microsoft\AddIns"
+call :Pasta "!BK!\Excel\XLSB" "%APPDATA%\Microsoft\Excel"
+
+REM Acesso Rapido
+call :Pasta "!BK!\AcessoRapido" "%APPDATA%\Microsoft\Windows\Recent\AutomaticDestinations"
+
+REM Assinaturas do Outlook
+call :Pasta "!BK!\Signatures" "%APPDATA%\Microsoft\Signatures"
+
+echo.
+echo ===== Resumo =====
+echo Restaurados: !OK!
+echo Ignorados..: !IGN!
+echo Erros......: !ERR!
+goto :Fim
+
+:Pasta
+REM %1 = pasta no backup | %2 = pasta de destino original
+if not exist "%~1\" goto :eof
+for /r "%~1" %%F in (*) do call :Arq "%%F" "%~1" "%~2"
+goto :eof
+
+:Arq
+REM %1 = arquivo no backup | %2 = raiz no backup | %3 = raiz no destino
+set "REL=%~1"
+set "REL=!REL:%~2\=!"
+set "DST=%~3\!REL!"
+for %%I in ("!DST!") do set "DDIR=%%~dpI"
+if not exist "!DDIR!" goto :A_Ign
+copy /y "%~1" "!DST!" >nul 2>&1
+if errorlevel 1 goto :A_Err
+set /a OK+=1
+echo [OK] !DST!
+goto :eof
+:A_Ign
+set /a IGN+=1
+echo [IGNORADO] pasta de destino nao existe: !DST!
+goto :eof
+:A_Err
+set /a ERR+=1
+echo [ERRO] nao foi possivel copiar (em uso ou sem permissao): !DST!
+goto :eof
+
+:RacfInvalida
+echo.
+echo ERRO: RACF invalida. Use apenas letras e numeros.
+goto :Fim
+
+:SemBackup
+echo.
+echo ERRO: pasta de backup nao encontrada: !BK!
+
+:Fim
+echo.
+echo Pressione qualquer tecla para fechar...
+pause >nul
+endlocal
+exit /b
